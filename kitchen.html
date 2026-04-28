@@ -3,95 +3,41 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chef's Live Dashboard</title>
+    <title>Kitchen Dashboard</title>
     <style>
-        body { font-family: Arial, sans-serif; background-color: #2c3e50; color: white; padding: 20px; }
-        h1 { text-align: center; color: #f1c40f; }
-        .dashboard { display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; margin-top: 30px;}
-        .order-ticket { background: #ecf0f1; color: #333; padding: 20px; border-radius: 8px; width: 300px; box-shadow: 0 4px 8px rgba(0,0,0,0.2); position: relative; padding-bottom: 60px;}
-        .order-header { display: flex; justify-content: space-between; border-bottom: 2px dashed #bdc3c7; padding-bottom: 10px; margin-bottom: 10px; font-weight: bold; font-size: 1.2em;}
-        .status-badge { background: #e67e22; color: white; padding: 5px 10px; border-radius: 4px; font-size: 0.8em; }
-        .food-item { font-size: 1.1em; margin: 10px 0; display: flex; justify-content: space-between;}
-        .done-btn { background-color: #27ae60; color: white; border: none; padding: 10px; width: calc(100% - 40px); border-radius: 5px; cursor: pointer; position: absolute; bottom: 20px; font-weight: bold; font-size: 1em;}
-        .done-btn:hover { background-color: #2ecc71; }
+        body { font-family: sans-serif; background: #333; color: white; padding: 20px; }
+        .order-card { background: #444; padding: 15px; margin: 10px 0; border-left: 5px solid #ffc107; }
+        h1 { color: #ffc107; }
     </style>
 </head>
 <body>
-
-    <h1>👨‍🍳 Kitchen Live Orders</h1>
-    
-    <div class="dashboard" id="dashboard">
-        <p>Waiting for orders...</p>
-    </div>
+    <h1>Active Orders</h1>
+    <div id="orders-container"></div>
 
     <script>
-        // Fetch Live Orders
-        async function fetchLiveOrders() {
-            try {
-                const response = await fetch('http://127.0.0.1:5000/kitchen');
-                const data = await response.json();
-                const dashboard = document.getElementById('dashboard');
-                
-                if (data.status === "Success") {
-                    dashboard.innerHTML = ''; 
-                    
-                    if(data.orders.length === 0) {
-                        dashboard.innerHTML = '<p>No active orders right now. Kitchen is clear!</p>';
-                        return;
-                    }
+        const API_URL = "https://cloud-kitchen-project.onrender.com";
 
-                    const groupedOrders = {};
-                    data.orders.forEach(row => {
-                        if(!groupedOrders[row.OrderID]) {
-                            groupedOrders[row.OrderID] = { status: row.OrderStatus, items: [] };
-                        }
-                        groupedOrders[row.OrderID].items.push({ name: row.ItemName, qty: row.Quantity });
-                    });
+        async function fetchOrders() {
+            const response = await fetch(`${API_URL}/active_orders`);
+            const orders = await response.json();
+            const container = document.getElementById('orders-container');
+            container.innerHTML = "";
 
-                    for (const [orderId, orderData] of Object.entries(groupedOrders)) {
-                        const ticket = document.createElement('div');
-                        ticket.className = 'order-ticket';
-                        
-                        let itemsHtml = '';
-                        orderData.items.forEach(item => {
-                            itemsHtml += `<div class="food-item"><span>${item.name}</span> <span>x${item.qty}</span></div>`;
-                        });
-
-                        // We added a "Mark as Ready" button here!
-                        ticket.innerHTML = `
-                            <div class="order-header">
-                                <span>Order #${orderId}</span>
-                                <span class="status-badge">${orderData.status}</span>
-                            </div>
-                            ${itemsHtml}
-                            <button class="done-btn" onclick="markOrderReady(${orderId})">✔️ Mark as Ready</button>
-                        `;
-                        dashboard.appendChild(ticket);
-                    }
-                }
-            } catch (error) {
-                console.error("Error:", error);
-            }
+            orders.forEach(order => {
+                const div = document.createElement('div');
+                div.className = 'order-card';
+                div.innerHTML = `
+                    <h3>Customer: ${order.customer_name}</h3>
+                    <p><strong>Items:</strong> ${order.food_items}</p>
+                    <p>Status: ${order.status}</p>
+                `;
+                container.appendChild(div);
+            });
         }
 
-        // Send update to the Python server when chef clicks "Done"
-        async function markOrderReady(orderId) {
-            try {
-                const response = await fetch(`http://127.0.0.1:5000/update-status/${orderId}`, {
-                    method: 'POST'
-                });
-                const result = await response.json();
-                if(result.status === "Success") {
-                    // Instantly refresh the screen so the ticket disappears!
-                    fetchLiveOrders(); 
-                }
-            } catch (error) {
-                alert("Failed to update order status.");
-            }
-        }
-
-        fetchLiveOrders();
-        setInterval(fetchLiveOrders, 5000);
+        // Auto-refresh every 5 seconds to see new orders
+        setInterval(fetchOrders, 5000);
+        fetchOrders();
     </script>
 </body>
 </html>
