@@ -2,104 +2,67 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Order Now - Cloud Kitchen</title>
+    <title>CKMS - Order Food</title>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #121212; color: white; margin: 0; padding: 20px; }
-        .container { max-width: 800px; margin: auto; }
-        h1 { color: #ffc107; text-align: center; }
-        .menu-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-top: 20px; }
-        .menu-item { background: #1e1e1e; padding: 20px; border-radius: 15px; border: 1px solid #333; text-align: center; transition: 0.3s; }
-        .menu-item.selected { border: 2px solid #ffc107; background: #252525; }
-        .price { color: #ffc107; font-size: 1.2em; font-weight: bold; }
-        .btn { background: #ffc107; color: black; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold; width: 100%; margin-top: 10px; }
-        .checkout-section { background: #1e1e1e; padding: 25px; border-radius: 15px; margin-top: 30px; border-top: 4px solid #28a745; }
-        textarea { width: 100%; padding: 12px; margin-top: 10px; border-radius: 8px; border: none; background: #2d2d2d; color: white; box-sizing: border-box; }
-        .total-box { font-size: 24px; margin: 15px 0; color: #28a745; font-weight: bold; }
+        body { font-family: sans-serif; background: #121212; color: white; padding: 20px; }
+        .card { background: #1e1e1e; padding: 20px; border-radius: 10px; margin-bottom: 20px; border: 1px solid #333; }
+        .selected { border: 2px solid #ffc107; }
+        button { background: #ffc107; color: black; border: none; padding: 10px; width: 100%; font-weight: bold; cursor: pointer; border-radius: 5px; }
+        input, select, textarea { width: 100%; padding: 12px; margin: 10px 0; border-radius: 5px; background: #2d2d2d; color: white; border: none; box-sizing: border-box; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Welcome, <span id="user-name">Guest</span>!</h1>
-        <p style="text-align: center;">Choose your items and confirm your delivery details.</p>
-
-        <div id="menu-container" class="menu-grid">Loading Menu...</div>
-
-        <div class="checkout-section">
-            <h3>Checkout & Payment</h3>
-            <div class="total-box">Total Amount: ₹<span id="total-price">0.00</span></div>
-            <textarea id="delivery-address" rows="3" placeholder="Enter full delivery address..."></textarea>
-            <button class="btn" style="background: #28a745; color: white; margin-top: 20px;" onclick="placeOrder()">CONFIRM & PAY NOW</button>
-        </div>
+    <h1>Welcome, <span id="uname">Guest</span></h1>
+    <div id="menu">Loading...</div>
+    
+    <div class="card">
+        <h3>Checkout</h3>
+        <p>Total: ₹<span id="total">0.00</span></p>
+        <select id="pay-method">
+            <option value="UPI">UPI (GPay/PhonePe)</option>
+            <option value="Card">Credit/Debit Card</option>
+            <option value="COD">Cash on Delivery</option>
+        </select>
+        <textarea id="addr" placeholder="Enter Delivery Address"></textarea>
+        <button onclick="placeOrder()">CONFIRM & PAY</button>
     </div>
 
     <script>
-        const API_URL = "https://cloud-kitchen-project.onrender.com";
-        let selectedItems = [];
-        let totalBill = 0;
-
-        // Check login session
+        const API = "https://cloud-kitchen-project.onrender.com";
+        let cart = []; let bill = 0;
         const name = localStorage.getItem('userName') || "Guest";
-        document.getElementById('user-name').innerText = name;
+        document.getElementById('uname').innerText = name;
 
-        async function fetchMenu() {
-            try {
-                const res = await fetch(`${API_URL}/menu`);
-                const items = await res.json();
-                const container = document.getElementById('menu-container');
-                container.innerHTML = "";
-                items.forEach(item => {
-                    const div = document.createElement('div');
-                    div.className = 'menu-item';
-                    div.id = `item-${item.item_id}`;
-                    div.innerHTML = `
-                        <h3>${item.item_name}</h3>
-                        <p class="price">₹${item.price}</p>
-                        <button class="btn" onclick="toggleItem(${item.item_id}, ${item.price})">Add to Cart</button>
-                    `;
-                    container.appendChild(div);
-                });
-            } catch (err) { console.error("Menu failed to load"); }
+        async function load() {
+            const res = await fetch(`${API}/menu`);
+            const items = await res.json();
+            const div = document.getElementById('menu'); div.innerHTML = "";
+            items.forEach(i => {
+                div.innerHTML += `<div class="card" id="item-${i.item_id}">
+                    <h4>${i.item_name} - ₹${i.price}</h4>
+                    <button onclick="toggle(${i.item_id}, ${i.price})">Select</button>
+                </div>`;
+            });
         }
 
-        function toggleItem(id, price) {
+        function toggle(id, price) {
             const el = document.getElementById(`item-${id}`);
-            if (selectedItems.includes(id)) {
-                selectedItems = selectedItems.filter(i => i !== id);
-                totalBill -= price;
-                el.classList.remove('selected');
-            } else {
-                selectedItems.push(id);
-                totalBill += price;
-                el.classList.add('selected');
-            }
-            document.getElementById('total-price').innerText = totalBill.toFixed(2);
+            if(cart.includes(id)) { cart = cart.filter(x => x !== id); bill -= price; el.classList.remove('selected'); }
+            else { cart.push(id); bill += price; el.classList.add('selected'); }
+            document.getElementById('total').innerText = bill.toFixed(2);
         }
 
         async function placeOrder() {
-            const address = document.getElementById('delivery-address').value;
-            if (selectedItems.length === 0) return alert("Your cart is empty!");
-            if (!address) return alert("Please enter a delivery address!");
-
-            const response = await fetch(`${API_URL}/place_order`, {
+            const addr = document.getElementById('addr').value;
+            if(!addr || cart.length === 0) return alert("Fill all details!");
+            const res = await fetch(`${API}/place_order`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    customer_name: name,
-                    items: selectedItems,
-                    total_price: totalBill,
-                    address: address
-                })
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({customer_name: name, items: cart, total_price: bill, address: addr, payment_method: document.getElementById('pay-method').value})
             });
-
-            if (response.ok) {
-                alert("Order Placed Successfully! Payment Verified.");
-                window.location.reload();
-            } else {
-                alert("Order failed. Please try again.");
-            }
+            if(res.ok) { alert("Order Success!"); window.location.reload(); }
         }
-        fetchMenu();
+        load();
     </script>
 </body>
 </html>
