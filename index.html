@@ -1,68 +1,21 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>CKMS - Order Food</title>
-    <style>
-        body { font-family: sans-serif; background: #121212; color: white; padding: 20px; }
-        .card { background: #1e1e1e; padding: 20px; border-radius: 10px; margin-bottom: 20px; border: 1px solid #333; }
-        .selected { border: 2px solid #ffc107; }
-        button { background: #ffc107; color: black; border: none; padding: 10px; width: 100%; font-weight: bold; cursor: pointer; border-radius: 5px; }
-        input, select, textarea { width: 100%; padding: 12px; margin: 10px 0; border-radius: 5px; background: #2d2d2d; color: white; border: none; box-sizing: border-box; }
-    </style>
-</head>
-<body>
-    <h1>Welcome, <span id="uname">Guest</span></h1>
-    <div id="menu">Loading...</div>
-    
-    <div class="card">
-        <h3>Checkout</h3>
-        <p>Total: ₹<span id="total">0.00</span></p>
-        <select id="pay-method">
-            <option value="UPI">UPI (GPay/PhonePe)</option>
-            <option value="Card">Credit/Debit Card</option>
-            <option value="COD">Cash on Delivery</option>
-        </select>
-        <textarea id="addr" placeholder="Enter Delivery Address"></textarea>
-        <button onclick="placeOrder()">CONFIRM & PAY</button>
-    </div>
-
+<head><meta charset="UTF-8"><title>CKMS - Signup</title></head>
+<body style="background:#121212; color:white; font-family:sans-serif; text-align:center; padding:50px;">
+    <h2>Create Account</h2>
+    <input type="text" id="name" placeholder="Full Name" style="padding:10px; margin:5px;"><br>
+    <input type="email" id="email" placeholder="Email" style="padding:10px; margin:5px;"><br>
+    <input type="password" id="pass" placeholder="Password" style="padding:10px; margin:5px;"><br>
+    <button onclick="signup()" style="padding:10px 20px; background:#ffc107;">Register</button>
+    <p>Already a member? <a href="login.html" style="color:#ffc107;">Login</a></p>
     <script>
-        const API = "https://cloud-kitchen-project.onrender.com";
-        let cart = []; let bill = 0;
-        const name = localStorage.getItem('userName') || "Guest";
-        document.getElementById('uname').innerText = name;
-
-        async function load() {
-            const res = await fetch(`${API}/menu`);
-            const items = await res.json();
-            const div = document.getElementById('menu'); div.innerHTML = "";
-            items.forEach(i => {
-                div.innerHTML += `<div class="card" id="item-${i.item_id}">
-                    <h4>${i.item_name} - ₹${i.price}</h4>
-                    <button onclick="toggle(${i.item_id}, ${i.price})">Select</button>
-                </div>`;
+        async function signup() {
+            const res = await fetch("https://cloud-kitchen-project.onrender.com/signup", {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({fullname: document.getElementById('name').value, email: document.getElementById('email').value, password: document.getElementById('pass').value})
             });
+            if(res.ok) window.location.href="login.html"; else alert("Error!");
         }
-
-        function toggle(id, price) {
-            const el = document.getElementById(`item-${id}`);
-            if(cart.includes(id)) { cart = cart.filter(x => x !== id); bill -= price; el.classList.remove('selected'); }
-            else { cart.push(id); bill += price; el.classList.add('selected'); }
-            document.getElementById('total').innerText = bill.toFixed(2);
-        }
-
-        async function placeOrder() {
-            const addr = document.getElementById('addr').value;
-            if(!addr || cart.length === 0) return alert("Fill all details!");
-            const res = await fetch(`${API}/place_order`, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({customer_name: name, items: cart, total_price: bill, address: addr, payment_method: document.getElementById('pay-method').value})
-            });
-            if(res.ok) { alert("Order Success!"); window.location.reload(); }
-        }
-        load();
     </script>
 </body>
 </html>
