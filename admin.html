@@ -3,21 +3,21 @@
 <head><meta charset="UTF-8"><title>CKMS Admin</title>
 <style>
     body { background: #000; color: white; font-family: sans-serif; padding: 20px; }
-    .box { background: #111; padding: 20px; border-radius: 10px; border-top: 4px solid #ffc107; margin-bottom: 20px; }
+    .box { background: #111; padding: 20px; border-radius: 10px; border-top: 4px solid #ffc107; margin-bottom: 20px; text-align: center; }
     table { width: 100%; border-collapse: collapse; background: #111; }
     th, td { padding: 12px; border: 1px solid #333; text-align: left; }
     button { background: #28a745; color: white; border: none; padding: 8px; cursor: pointer; }
-</style></head>
+</style>
+</head>
 <body>
-    <h1>Management Dashboard</h1>
+    <h1>Admin Overview</h1>
     <div style="display:flex; gap:20px;">
         <div class="box" style="flex:1;"><h3>REVENUE</h3><h2 id="rev">₹0</h2></div>
-        <div class="box" style="flex:1;"><h3>ORDERS</h3><h2 id="cnt">0</h2></div>
+        <div class="box" style="flex:1;"><h3>ACTIVE ORDERS</h3><h2 id="cnt">0</h2></div>
     </div>
     <div class="box">
-        <h3>Add Menu Item</h3>
-        <input id="f-name" placeholder="Name"> <input id="f-price" placeholder="Price">
-        <button onclick="addFood()">Add Item</button>
+        <input id="f-name" placeholder="Item Name"> <input id="f-price" placeholder="Price">
+        <button onclick="addFood()">Add Item to Menu</button>
     </div>
     <table>
         <thead><tr><th>ID</th><th>Customer</th><th>Status</th><th>Rider</th><th>Action</th></tr></thead>
@@ -34,7 +34,7 @@
                 rows += `<tr><td>#${o.order_id}</td><td>${o.customer_name}</td>
                 <td><input id="s-${o.order_id}" value="${o.order_status}"></td>
                 <td><input id="r-${o.order_id}" value="${o.delivery_rider}"></td>
-                <td><button onclick="up(${o.order_id})">Save</button></td></tr>`;
+                <td><button onclick="up(${o.order_id})">Update</button></td></tr>`;
             });
             document.getElementById('rev').innerText = "₹" + total;
             document.getElementById('cnt').innerText = data.length;

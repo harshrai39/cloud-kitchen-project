@@ -6,22 +6,26 @@
     .menu-item { background: #1a1a1a; padding: 15px; margin: 10px 0; border-radius: 8px; display: flex; justify-content: space-between; border-left: 5px solid #ffc107; }
     .checkout { background: #1a1a1a; padding: 25px; border-radius: 12px; margin-top: 30px; }
     button { background: #ffc107; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold; }
-</style></head>
+    .track-box { background: #222; border: 1px solid #ffc107; padding: 15px; margin-top: 20px; border-radius: 10px; display: none; }
+</style>
+</head>
 <body>
     <h1>Welcome, <span id="user"></span></h1>
     <div id="menu-list">Loading Menu...</div>
     <div class="checkout">
         <h3>Total: ₹<span id="bill">0</span></h3>
-        <input id="addr" placeholder="Address" style="width:100%; padding:10px; margin:10px 0;">
+        <textarea id="addr" placeholder="Delivery Address" style="width:100%; padding:10px; margin-bottom:10px;"></textarea>
         <button onclick="placeOrder()" style="width:100%; background:#28a745; color:white;">PLACE ORDER</button>
     </div>
-    <div id="track" style="display:none; margin-top:20px; border:1px solid #ffc107; padding:15px;">
-        <h4>Status: <span id="st" style="color:#ffc107;"></span> | Rider: <span id="rd"></span></h4>
+    <div id="track-box" class="track-box">
+        <h4>Live Status: <span id="status-txt" style="color:#ffc107;">Preparing</span></h4>
+        <p>Rider: <span id="rider-txt">Searching...</span></p>
     </div>
     <script>
         const API = "https://cloud-kitchen-project.onrender.com";
         let cart = []; let total = 0;
         document.getElementById('user').innerText = localStorage.getItem('userName');
+
         async function load() {
             const res = await fetch(`${API}/menu`);
             const data = await res.json();
@@ -34,13 +38,13 @@
                 method: 'POST', headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({customer_name: localStorage.getItem('userName'), items: cart, total_price: total, address: document.getElementById('addr').value, payment_method: "UPI"})
             });
-            if(res.ok) { alert("Ordered!"); document.getElementById('track').style.display='block'; setInterval(track, 5000); }
+            if(res.ok) { alert("Order Placed!"); document.getElementById('track-box').style.display = 'block'; setInterval(track, 5000); }
         }
         async function track() {
             const res = await fetch(`${API}/active_orders`);
             const data = await res.json();
             const my = data.find(o => o.customer_name === localStorage.getItem('userName'));
-            if(my) { document.getElementById('st').innerText = my.order_status; document.getElementById('rd').innerText = my.delivery_rider; }
+            if(my) { document.getElementById('status-txt').innerText = my.order_status; document.getElementById('rider-txt').innerText = my.delivery_rider; }
         }
         load();
     </script>

@@ -4,9 +4,8 @@ from flask_cors import CORS
 import hashlib
 
 app = Flask(__name__)
-CORS(app)
+CORS(app) # Fixes the "not responding" issue
 
-# Database Configuration (Clever Cloud)
 db_config = {
     'host': 'bflsc3v2zuem9cpblkk9-mysql.services.clever-cloud.com',
     'user': 'ukqysulb87iuj4pg',
@@ -25,7 +24,6 @@ def setup():
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        # Initializing Tables for CKMS
         cursor.execute("CREATE TABLE IF NOT EXISTS users (user_id INT AUTO_INCREMENT PRIMARY KEY, fullname VARCHAR(100), email VARCHAR(100) UNIQUE, password VARCHAR(255), role ENUM('customer', 'admin') DEFAULT 'customer')")
         cursor.execute("CREATE TABLE IF NOT EXISTS menu_items (item_id INT AUTO_INCREMENT PRIMARY KEY, item_name VARCHAR(100), price DECIMAL(10,2))")
         cursor.execute("""
@@ -41,13 +39,12 @@ def setup():
         """)
         cursor.execute("CREATE TABLE IF NOT EXISTS order_items (id INT AUTO_INCREMENT PRIMARY KEY, order_id INT, item_id INT, FOREIGN KEY (order_id) REFERENCES orders(order_id), FOREIGN KEY (item_id) REFERENCES menu_items(item_id))")
         conn.commit()
-        return jsonify({"message": "CKMS Database Active & Ready!"})
+        return jsonify({"message": "CKMS Backend Ready!"})
     except Exception as e:
         return jsonify({"error": str(e)})
     finally:
-        if conn: conn.close()
+        if conn: conn.close() # Fixes the "Max Connections" error
 
-# --- AUTHENTICATION ---
 @app.route('/signup', methods=['POST'])
 def signup():
     data = request.json
@@ -58,8 +55,6 @@ def signup():
         cursor.execute("INSERT INTO users (fullname, email, password) VALUES (%s, %s, %s)", (data['fullname'], data['email'], pw))
         conn.commit()
         return jsonify({"message": "Success"}), 201
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
     finally:
         conn.close()
 
@@ -77,7 +72,6 @@ def login():
     finally:
         conn.close()
 
-# --- MENU & INVENTORY ---
 @app.route('/menu', methods=['GET'])
 def get_menu():
     conn = get_db_connection()
@@ -100,20 +94,18 @@ def add_menu_item():
     finally:
         conn.close()
 
-# --- ORDERING & ACID TRANSACTIONS ---
 @app.route('/place_order', methods=['POST'])
 def place_order():
     data = request.json
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
-        # Atomic Transaction Start
         cursor.execute("INSERT INTO orders (customer_name, total_amount, payment_method, delivery_address) VALUES (%s, %s, %s, %s)", 
                        (data['customer_name'], data['total_price'], data['payment_method'], data['address']))
         oid = cursor.lastrowid
         for iid in data['items']:
             cursor.execute("INSERT INTO order_items (order_id, item_id) VALUES (%s, %s)", (oid, iid))
-        conn.commit() # Atomic Transaction Commit
+        conn.commit()
         return jsonify({"message": "Success", "order_id": oid})
     except Exception as e:
         conn.rollback()
@@ -121,13 +113,11 @@ def place_order():
     finally:
         conn.close()
 
-# --- LOGISTICS & ANALYTICS ---
 @app.route('/active_orders', methods=['GET'])
 def get_orders():
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     try:
-        # Complex Join for Report Section 3.2
         cursor.execute("""
             SELECT o.*, GROUP_CONCAT(m.item_name SEPARATOR ', ') as food_items 
             FROM orders o 
@@ -149,7 +139,7 @@ def update_order():
         cursor.execute("UPDATE orders SET order_status = %s, delivery_rider = %s WHERE order_id = %s", 
                        (data['status'], data['rider'], data['order_id']))
         conn.commit()
-        return jsonify({"message": "Logistics Updated"})
+        return jsonify({"message": "Updated"})
     finally:
         conn.close()
 
