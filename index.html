@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cloud Kitchen Menu</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f4f4f9; padding: 20px; }
+        h1, h2 { color: #333; text-align: center; }
+        .menu-container { display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; margin-bottom: 40px;}
+        .menu-card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); width: 250px; text-align: center; }
+        .price { color: #27ae60; font-weight: bold; font-size: 1.2em; margin-bottom: 15px; }
+        .order-btn { background-color: #ff4757; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; }
+        .order-btn:hover { background-color: #ff6b81; }
+        .cart-panel { background: white; padding: 20px; border-radius: 8px; max-width: 400px; margin: 0 auto; text-align: center; box-shadow: 0 4px 8px rgba(0,0,0,0.1);}
+        .checkout-btn { background-color: #2ed573; color: white; border: none; padding: 15px 30px; border-radius: 5px; cursor: pointer; font-size: 1.1em; margin-top: 10px;}
+    </style>
+</head>
+<body>
+
+    <h1>🍽️ Today's Menu</h1>
+    <div class="menu-container" id="menu-container">
+        <p>Loading menu from database...</p>
+    </div>
+
+    <div class="cart-panel">
+        <h2>🛒 Your Cart</h2>
+        <p id="cart-details">0 items (₹0.00)</p>
+        <button class="checkout-btn" onclick="placeOrder()">Place Order</button>
+    </div>
+
+    <script>
+        let cart = [];
+        let cartTotal = 0;
+
+        // Fetch the menu from the Python backend
+        async function loadMenu() {
+            try {
+                const response = await fetch('http://127.0.0.1:5000/menu');
+                const data = await response.json();
+                const container = document.getElementById('menu-container');
+                container.innerHTML = ''; 
+
+                if (data.status === "Success") {
+                    data.items.forEach(item => {
+                        const card = document.createElement('div');
+                        card.className = 'menu-card';
+                        card.innerHTML = `
+                            <h3>${item.ItemName}</h3>
+                            <p class="price">₹${item.Price}</p>
+                            <button class="order-btn" onclick="addToCart(${item.MenuID}, '${item.ItemName}', ${item.Price})">Add to Cart</button>
+                        `;
+                        container.appendChild(card);
+                    });
+                }
+            } catch (error) {
+                console.error("Error:", error);
+                document.getElementById('menu-container').innerHTML = '<p>Could not load menu. Is the Python server running?</p>';
+            }
+        }
+
+        // Add items to the local JS cart
+        function addToCart(id, name, price) {
+            cart.push({ MenuID: id, ItemName: name, Price: price });
+            cartTotal += parseFloat(price);
+            document.getElementById('cart-details').innerText = `${cart.length} items (₹${cartTotal.toFixed(2)})`;
+        }
+
+        // Send the cart to the Python backend to save in the database
+        async function placeOrder() {
+            if(cart.length === 0) {
+                alert("Your cart is empty!");
+                return;
+            }
+
+            try {
+                const response = await fetch('http://127.0.0.1:5000/order', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ items: cart, total: cartTotal })
+                });
+                
+                const result = await response.json();
+                
+                if(result.status === "Success") {
+                    alert(result.message); // Success popup!
+                    // Clear the cart after ordering
+                    cart = [];
+                    cartTotal = 0;
+                    document.getElementById('cart-details').innerText = `0 items (₹0.00)`;
+                } else {
+                    alert("Error: " + result.message);
+                }
+                
+            } catch (error) {
+                alert("Failed to place order. Check if server is running.");
+            }
+        }
+
+        // Load the menu when the page opens
+        loadMenu();
+    </script>
+</body>
+</html>
