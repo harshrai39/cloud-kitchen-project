@@ -4,8 +4,10 @@ from flask_cors import CORS
 import hashlib
 
 app = Flask(__name__)
-CORS(app) # Fixes the "not responding" issue
+# CRITICAL: This allows your GitHub frontend to communicate with this Render backend
+CORS(app) 
 
+# Database Configuration for Clever Cloud
 db_config = {
     'host': 'bflsc3v2zuem9cpblkk9-mysql.services.clever-cloud.com',
     'user': 'ukqysulb87iuj4pg',
@@ -24,6 +26,7 @@ def setup():
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
+        # Initializing the Normalized Schema
         cursor.execute("CREATE TABLE IF NOT EXISTS users (user_id INT AUTO_INCREMENT PRIMARY KEY, fullname VARCHAR(100), email VARCHAR(100) UNIQUE, password VARCHAR(255), role ENUM('customer', 'admin') DEFAULT 'customer')")
         cursor.execute("CREATE TABLE IF NOT EXISTS menu_items (item_id INT AUTO_INCREMENT PRIMARY KEY, item_name VARCHAR(100), price DECIMAL(10,2))")
         cursor.execute("""
@@ -39,11 +42,13 @@ def setup():
         """)
         cursor.execute("CREATE TABLE IF NOT EXISTS order_items (id INT AUTO_INCREMENT PRIMARY KEY, order_id INT, item_id INT, FOREIGN KEY (order_id) REFERENCES orders(order_id), FOREIGN KEY (item_id) REFERENCES menu_items(item_id))")
         conn.commit()
-        return jsonify({"message": "CKMS Backend Ready!"})
+        return jsonify({"message": "CKMS Backend Ready and Database Synced!"})
     except Exception as e:
         return jsonify({"error": str(e)})
     finally:
-        if conn: conn.close() # Fixes the "Max Connections" error
+        if conn:
+            cursor.close()
+            conn.close()
 
 @app.route('/signup', methods=['POST'])
 def signup():
@@ -55,7 +60,10 @@ def signup():
         cursor.execute("INSERT INTO users (fullname, email, password) VALUES (%s, %s, %s)", (data['fullname'], data['email'], pw))
         conn.commit()
         return jsonify({"message": "Success"}), 201
+    except Exception as e:
+        return jsonify({"error": "Email already exists"}), 400
     finally:
+        cursor.close()
         conn.close()
 
 @app.route('/login', methods=['POST'])
@@ -65,11 +73,13 @@ def login():
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     try:
-        cursor.execute("SELECT * FROM users WHERE email = %s AND password = %s", (data['email'], pw))
+        cursor.execute("SELECT fullname, role FROM users WHERE email = %s AND password = %s", (data['email'], pw))
         user = cursor.fetchone()
-        if user: return jsonify({"fullname": user['fullname'], "role": user['role']})
-        return jsonify({"error": "Failed"}), 401
+        if user: 
+            return jsonify(user)
+        return jsonify({"error": "Invalid email or password"}), 401
     finally:
+        cursor.close()
         conn.close()
 
 @app.route('/menu', methods=['GET'])
@@ -80,6 +90,7 @@ def get_menu():
         cursor.execute("SELECT * FROM menu_items")
         return jsonify(cursor.fetchall())
     finally:
+        cursor.close()
         conn.close()
 
 @app.route('/add_menu_item', methods=['POST'])
@@ -90,8 +101,9 @@ def add_menu_item():
     try:
         cursor.execute("INSERT INTO menu_items (item_name, price) VALUES (%s, %s)", (data['item_name'], data['price']))
         conn.commit()
-        return jsonify({"message": "Added"})
+        return jsonify({"message": "Item added to menu"})
     finally:
+        cursor.close()
         conn.close()
 
 @app.route('/place_order', methods=['POST'])
@@ -100,17 +112,19 @@ def place_order():
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
+        # ACID Transaction: START
         cursor.execute("INSERT INTO orders (customer_name, total_amount, payment_method, delivery_address) VALUES (%s, %s, %s, %s)", 
                        (data['customer_name'], data['total_price'], data['payment_method'], data['address']))
         oid = cursor.lastrowid
         for iid in data['items']:
             cursor.execute("INSERT INTO order_items (order_id, item_id) VALUES (%s, %s)", (oid, iid))
-        conn.commit()
+        conn.commit() # ACID Transaction: COMMIT
         return jsonify({"message": "Success", "order_id": oid})
     except Exception as e:
-        conn.rollback()
+        if conn: conn.rollback() # ACID Transaction: ROLLBACK on failure
         return jsonify({"error": str(e)}), 500
     finally:
+        cursor.close()
         conn.close()
 
 @app.route('/active_orders', methods=['GET'])
@@ -118,6 +132,7 @@ def get_orders():
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     try:
+        # Demonstrating SQL Joins and GROUP_CONCAT for the project report
         cursor.execute("""
             SELECT o.*, GROUP_CONCAT(m.item_name SEPARATOR ', ') as food_items 
             FROM orders o 
@@ -128,6 +143,7 @@ def get_orders():
         """)
         return jsonify(cursor.fetchall())
     finally:
+        cursor.close()
         conn.close()
 
 @app.route('/update_order', methods=['POST'])
@@ -139,9 +155,11 @@ def update_order():
         cursor.execute("UPDATE orders SET order_status = %s, delivery_rider = %s WHERE order_id = %s", 
                        (data['status'], data['rider'], data['order_id']))
         conn.commit()
-        return jsonify({"message": "Updated"})
+        return jsonify({"message": "Order Logistics Updated"})
     finally:
+        cursor.close()
         conn.close()
 
 if __name__ == '__main__':
+    # Use port 5000 as required for Render/Flask standard
     app.run(host='0.0.0.0', port=5000)
