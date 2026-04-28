@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CKMS - Create Account</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background-color: #121212; color: white; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .signup-card { background: #1e1e1e; padding: 40px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); width: 350px; text-align: center; }
+        h2 { color: #ffc107; margin-bottom: 25px; }
+        input { width: 100%; padding: 12px; margin: 10px 0; border-radius: 8px; border: 1px solid #444; background: #2d2d2d; color: white; box-sizing: border-box; }
+        button { width: 100%; padding: 12px; background: #ffc107; color: black; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; margin-top: 15px; transition: 0.3s; }
+        button:hover { background: #e0a800; }
+        .login-link { margin-top: 20px; font-size: 14px; color: #bbb; }
+        .login-link a { color: #ffc107; text-decoration: none; }
+    </style>
+</head>
+<body>
+    <div class="signup-card">
+        <h2>Join Cloud Kitchen</h2>
+        <input type="text" id="fullname" placeholder="Full Name">
+        <input type="email" id="email" placeholder="Email Address">
+        <input type="password" id="password" placeholder="Create Password">
+        <button onclick="registerUser()">Sign Up</button>
+        <div class="login-link">
+            Already have an account? <a href="login.html">Login</a>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = "https://cloud-kitchen-project.onrender.com";
+
+        async function registerUser() {
+            const fullname = document.getElementById('fullname').value;
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+
+            if (!fullname || !email || !password) return alert("Please fill all fields");
+
+            const response = await fetch(`${API_URL}/signup`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fullname, email, password })
+            });
+
+            const result = await response.json();
+            if (response.ok) {
+                alert("Registration Successful! You can now login.");
+                window.location.href = "login.html"; // Redirect to login
+            } else {
+                alert(result.error || "Signup failed");
+            }
+        }
+    </script>
+</body>
+</html>
