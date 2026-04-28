@@ -4,9 +4,8 @@ from flask_cors import CORS
 import hashlib
 
 app = Flask(__name__)
-CORS(app)
+CORS(app) # CRITICAL: This stops the "not responding" issue
 
-# Database Configuration
 db_config = {
     'host': 'bflsc3v2zuem9cpblkk9-mysql.services.clever-cloud.com',
     'user': 'ukqysulb87iuj4pg',
@@ -23,7 +22,6 @@ def setup():
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        # Create Tables as per Schema in Report
         cursor.execute("CREATE TABLE IF NOT EXISTS users (user_id INT AUTO_INCREMENT PRIMARY KEY, fullname VARCHAR(100), email VARCHAR(100) UNIQUE, password VARCHAR(255), role ENUM('customer', 'admin') DEFAULT 'customer')")
         cursor.execute("CREATE TABLE IF NOT EXISTS menu_items (item_id INT AUTO_INCREMENT PRIMARY KEY, item_name VARCHAR(100), price DECIMAL(10,2))")
         cursor.execute("""
@@ -39,11 +37,12 @@ def setup():
         """)
         cursor.execute("CREATE TABLE IF NOT EXISTS order_items (id INT AUTO_INCREMENT PRIMARY KEY, order_id INT, item_id INT, FOREIGN KEY (order_id) REFERENCES orders(order_id), FOREIGN KEY (item_id) REFERENCES menu_items(item_id))")
         conn.commit()
-        return jsonify({"status": "Success", "message": "CKMS Database Fully Initialized!"})
+        cursor.close()
+        conn.close()
+        return jsonify({"status": "Success", "message": "CKMS Ready!"})
     except Exception as e:
         return jsonify({"error": str(e)})
 
-# --- AUTHENTICATION ---
 @app.route('/signup', methods=['POST'])
 def signup():
     data = request.json
@@ -55,7 +54,7 @@ def signup():
         conn.commit()
         return jsonify({"message": "Success"}), 201
     except:
-        return jsonify({"error": "User already exists"}), 400
+        return jsonify({"error": "User exists"}), 400
 
 @app.route('/login', methods=['POST'])
 def login():
@@ -66,9 +65,8 @@ def login():
     cursor.execute("SELECT * FROM users WHERE email = %s AND password = %s", (data['email'], pw))
     user = cursor.fetchone()
     if user: return jsonify({"fullname": user['fullname'], "role": user['role']})
-    return jsonify({"error": "Invalid Credentials"}), 401
+    return jsonify({"error": "Invalid"}), 401
 
-# --- INVENTORY & MENU ---
 @app.route('/menu', methods=['GET'])
 def get_menu():
     conn = get_db_connection()
@@ -83,25 +81,20 @@ def add_menu_item():
     cursor = conn.cursor()
     cursor.execute("INSERT INTO menu_items (item_name, price) VALUES (%s, %s)", (data['item_name'], data['price']))
     conn.commit()
-    return jsonify({"message": "Item added"})
+    return jsonify({"message": "Added"})
 
-# --- ORDERS & LOGISTICS ---
 @app.route('/place_order', methods=['POST'])
 def place_order():
     data = request.json
     conn = get_db_connection()
     cursor = conn.cursor()
-    try:
-        cursor.execute("INSERT INTO orders (customer_name, total_amount, payment_method, delivery_address) VALUES (%s, %s, %s, %s)", 
-                       (data['customer_name'], data['total_price'], data['payment_method'], data['address']))
-        oid = cursor.lastrowid
-        for iid in data['items']:
-            cursor.execute("INSERT INTO order_items (order_id, item_id) VALUES (%s, %s)", (oid, iid))
-        conn.commit()
-        return jsonify({"message": "Order Placed", "order_id": oid})
-    except:
-        conn.rollback()
-        return jsonify({"error": "Transaction Failed"}), 500
+    cursor.execute("INSERT INTO orders (customer_name, total_amount, payment_method, delivery_address) VALUES (%s, %s, %s, %s)", 
+                   (data['customer_name'], data['total_price'], data['payment_method'], data['address']))
+    oid = cursor.lastrowid
+    for iid in data['items']:
+        cursor.execute("INSERT INTO order_items (order_id, item_id) VALUES (%s, %s)", (oid, iid))
+    conn.commit()
+    return jsonify({"message": "Success", "order_id": oid})
 
 @app.route('/active_orders', methods=['GET'])
 def get_orders():

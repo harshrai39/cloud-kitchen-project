@@ -5,64 +5,87 @@
     <title>CKMS - Dispatch & Logistics</title>
     <style>
         body { font-family: 'Segoe UI', sans-serif; background: #0a0a0a; color: white; padding: 20px; }
-        .order-strip { background: #1a1a1a; padding: 20px; border-radius: 10px; margin-bottom: 15px; border-left: 5px solid #ffc107; display: flex; justify-content: space-between; align-items: center; }
-        select, button { padding: 10px; border-radius: 5px; border: none; cursor: pointer; }
-        .status-preparing { color: #ffc107; }
-        .status-delivery { color: #17a2b8; }
-        .status-done { color: #28a745; }
+        .order-card { 
+            background: #161616; 
+            padding: 20px; 
+            border-radius: 12px; 
+            margin-bottom: 15px; 
+            border-left: 8px solid #ffc107; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center;
+        }
+        .info b { color: #ffc107; font-size: 1.2em; }
+        select, input { padding: 10px; border-radius: 5px; border: none; background: #2a2a2a; color: white; margin-right: 10px; }
+        .btn-update { background: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        .status-tag { font-size: 0.8em; padding: 4px 8px; border-radius: 4px; background: #333; margin-left: 10px; }
     </style>
 </head>
 <body>
     <h1>Dispatch Control Center</h1>
-    <p>Assign riders and update order logistics.</p>
-    <div id="dispatch-list">Loading active shipments...</div>
+    <p>Manage rider assignments and delivery lifecycles.</p>
+    <hr style="border: 1px solid #222; margin-bottom: 30px;">
+
+    <div id="dispatch-list">Loading shipments...</div>
 
     <script>
         const API = "https://cloud-kitchen-project.onrender.com";
 
         async function loadDispatch() {
-            const res = await fetch(`${API}/active_orders`);
-            const orders = await res.json();
-            const container = document.getElementById('dispatch-list');
-            container.innerHTML = "";
+            try {
+                const res = await fetch(`${API}/active_orders`);
+                const orders = await res.json();
+                const container = document.getElementById('dispatch-list');
+                container.innerHTML = "";
 
-            orders.forEach(o => {
-                container.innerHTML += `
-                    <div class="order-strip">
-                        <div>
-                            <strong>Order #${o.order_id}</strong> - ${o.customer_name}<br>
-                            <small>${o.food_items}</small>
+                orders.forEach(o => {
+                    container.innerHTML += `
+                        <div class="order-card">
+                            <div class="info">
+                                <b>Order #${o.order_id}</b> <span class="status-tag">${o.order_status}</span><br>
+                                <small>Customer: ${o.customer_name}</small><br>
+                                <small>Items: ${o.food_items}</small>
+                            </div>
+                            <div>
+                                <input type="text" id="rider-${o.order_id}" placeholder="Assign Rider" value="${o.delivery_rider === 'Assigning...' ? '' : o.delivery_rider}">
+                                <select id="status-${o.order_id}">
+                                    <option value="Preparing" ${o.order_status === 'Preparing' ? 'selected' : ''}>Preparing</option>
+                                    <option value="Out for Delivery" ${o.order_status === 'Out for Delivery' ? 'selected' : ''}>Out for Delivery</option>
+                                    <option value="Delivered" ${o.order_status === 'Delivered' ? 'selected' : ''}>Delivered</option>
+                                </select>
+                                <button class="btn-update" onclick="updateLogistics(${o.order_id})">UPDATE</button>
+                            </div>
                         </div>
-                        <div>
-                            <select id="rider-${o.order_id}">
-                                <option>${o.delivery_rider}</option>
-                                <option value="Rahul">Rahul (Rider 1)</option>
-                                <option value="Amit">Amit (Rider 2)</option>
-                                <option value="Suresh">Suresh (Rider 3)</option>
-                            </select>
-                            <select id="status-${o.order_id}">
-                                <option>${o.order_status}</option>
-                                <option value="Preparing">Preparing</option>
-                                <option value="Out for Delivery">Out for Delivery</option>
-                                <option value="Delivered">Delivered</option>
-                            </select>
-                            <button onclick="updateLogistics(${o.order_id})" style="background:#28a745; color:white;">Update</button>
-                        </div>
-                    </div>
-                `;
-            });
+                    `;
+                });
+            } catch (err) {
+                console.error("Failed to load logistics data");
+            }
         }
 
         async function updateLogistics(id) {
-            const rider = document.getElementById(`rider-${id}`).value;
-            const status = document.getElementById(`status-${id}`).value;
+            const riderName = document.getElementById(`rider-${id}`).value || "Assigning...";
+            const statusValue = document.getElementById(`status-${id}`).value;
 
-            // Note: We need a small backend route for this, which we'll add next
-            alert(`Logistics Updated for #${id}: Rider ${rider} is now ${status}`);
+            const res = await fetch(`${API}/update_order`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    order_id: id,
+                    status: statusValue,
+                    rider: riderName
+                })
+            });
+
+            if (res.ok) {
+                alert(`Order #${id} Updated!`);
+                loadDispatch();
+            }
         }
 
         loadDispatch();
-        setInterval(loadDispatch, 10000); // Auto-refresh every 10 seconds
+        // Auto-refresh every 10 seconds to catch new orders
+        setInterval(loadDispatch, 10000);
     </script>
 </body>
 </html>

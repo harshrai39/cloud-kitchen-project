@@ -1,64 +1,56 @@
 <!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8"><title>CKMS Admin Dashboard</title>
+<head><meta charset="UTF-8"><title>CKMS Admin</title>
 <style>
     body { background: #000; color: white; font-family: sans-serif; padding: 20px; }
-    .stat-card { background: #111; padding: 25px; border-top: 4px solid #ffc107; border-radius: 12px; flex: 1; text-align: center; }
-    table { width: 100%; border-collapse: collapse; background: #111; margin-top: 20px; }
-    th, td { padding: 15px; border: 1px solid #333; text-align: left; }
-    input, button { padding: 8px; border-radius: 5px; }
-    .btn-save { background: #28a745; color: white; border: none; cursor: pointer; }
-</style>
-</head>
+    .box { background: #111; padding: 20px; border-radius: 10px; border-top: 4px solid #ffc107; margin-bottom: 20px; }
+    table { width: 100%; border-collapse: collapse; background: #111; }
+    th, td { padding: 12px; border: 1px solid #333; text-align: left; }
+    button { background: #28a745; color: white; border: none; padding: 8px; cursor: pointer; }
+</style></head>
 <body>
-    <h1>CKMS Business Overview</h1>
+    <h1>Management Dashboard</h1>
     <div style="display:flex; gap:20px;">
-        <div class="stat-card"><h3>TOTAL REVENUE</h3><h2 id="total-rev">₹0</h2></div>
-        <div class="stat-card"><h3>TOTAL ORDERS</h3><h2 id="total-cnt">0</h2></div>
+        <div class="box" style="flex:1;"><h3>REVENUE</h3><h2 id="rev">₹0</h2></div>
+        <div class="box" style="flex:1;"><h3>ORDERS</h3><h2 id="cnt">0</h2></div>
     </div>
-
-    <h3>Manage Inventory</h3>
-    <div style="background:#111; padding:15px; border-radius:10px;">
-        <input id="f-name" placeholder="Item Name"> <input id="f-price" placeholder="Price">
-        <button onclick="addFood()" style="background:#28a745; color:white; border:none; padding:10px;">Add to Menu</button>
+    <div class="box">
+        <h3>Add Menu Item</h3>
+        <input id="f-name" placeholder="Name"> <input id="f-price" placeholder="Price">
+        <button onclick="addFood()">Add Item</button>
     </div>
-
-    <h3>Live Logs & Logistics</h3>
     <table>
-        <thead><tr><th>ID</th><th>Customer</th><th>Status</th><th>Rider</th><th>Actions</th></tr></thead>
-        <tbody id="admin-table"></tbody>
+        <thead><tr><th>ID</th><th>Customer</th><th>Status</th><th>Rider</th><th>Action</th></tr></thead>
+        <tbody id="table"></tbody>
     </table>
-
     <script>
         const API = "https://cloud-kitchen-project.onrender.com";
         async function load() {
             const res = await fetch(`${API}/active_orders`);
             const data = await res.json();
-            let rev = 0; let body = "";
+            let total = 0; let rows = "";
             data.forEach(o => {
-                rev += parseFloat(o.total_amount);
-                body += `<tr><td>#${o.order_id}</td><td>${o.customer_name}</td>
-                    <td><input id="st-${o.order_id}" value="${o.order_status}"></td>
-                    <td><input id="rd-${o.order_id}" value="${o.delivery_rider}"></td>
-                    <td><button class="btn-save" onclick="update(${o.order_id})">Update</button></td></tr>`;
+                total += parseFloat(o.total_amount);
+                rows += `<tr><td>#${o.order_id}</td><td>${o.customer_name}</td>
+                <td><input id="s-${o.order_id}" value="${o.order_status}"></td>
+                <td><input id="r-${o.order_id}" value="${o.delivery_rider}"></td>
+                <td><button onclick="up(${o.order_id})">Save</button></td></tr>`;
             });
-            document.getElementById('total-rev').innerText = "₹" + rev;
-            document.getElementById('total-cnt').innerText = data.length;
-            document.getElementById('admin-table').innerHTML = body;
+            document.getElementById('rev').innerText = "₹" + total;
+            document.getElementById('cnt').innerText = data.length;
+            document.getElementById('table').innerHTML = rows;
         }
-
         async function addFood() {
             await fetch(`${API}/add_menu_item`, {
-                method: 'POST', headers: {'Content-Type':'application/json'},
+                method:'POST', headers:{'Content-Type':'application/json'},
                 body: JSON.stringify({item_name: document.getElementById('f-name').value, price: document.getElementById('f-price').value})
             });
-            alert("Added!"); location.reload();
+            location.reload();
         }
-
-        async function update(id) {
+        async function up(id) {
             await fetch(`${API}/update_order`, {
                 method:'POST', headers:{'Content-Type':'application/json'},
-                body: JSON.stringify({order_id: id, status: document.getElementById(`st-${id}`).value, rider: document.getElementById(`rd-${id}`).value})
+                body: JSON.stringify({order_id:id, status:document.getElementById(`s-${id}`).value, rider:document.getElementById(`r-${id}`).value})
             });
             alert("Updated!"); load();
         }
