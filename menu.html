@@ -1,38 +1,68 @@
 <!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8"><title>CKMS - Menu</title></head>
-<body style="background:#121212; color:white; font-family:sans-serif; padding:20px;">
-    <h1>Welcome, <span id="user"></span></h1>
-    <div id="items">Loading...</div>
-    <div style="background:#1e1e1e; padding:20px; margin-top:20px;">
-        <h3>Checkout</h3>
-        <p>Total: ₹<span id="bill">0.00</span></p>
-        <select id="method"><option>UPI</option><option>Card</option><option>COD</option></select><br><br>
-        <textarea id="addr" placeholder="Address" style="width:100%"></textarea><br>
-        <button onclick="order()" style="width:100%; padding:10px; background:#28a745; color:white;">PAY & ORDER</button>
+<head><meta charset="UTF-8"><title>Cloud Kitchen - Order</title>
+<style>
+    body { background: #0b0b0b; color: white; font-family: sans-serif; padding: 20px; }
+    .menu-item { background: #1a1a1a; padding: 15px; margin: 10px 0; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; border-left: 5px solid #ffc107; }
+    .checkout { background: #1a1a1a; padding: 25px; border-radius: 12px; margin-top: 30px; }
+    button { background: #ffc107; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold; }
+    .track-box { background: #222; border: 1px solid #ffc107; padding: 15px; margin-top: 20px; border-radius: 10px; display: none; }
+</style>
+</head>
+<body>
+    <h1>Welcome, <span id="user">User</span></h1>
+    <div id="menu-list">Loading Menu...</div>
+
+    <div class="checkout">
+        <h3>Checkout & Track</h3>
+        <p>Total: ₹<span id="bill">0</span></p>
+        <select id="pay-method" style="padding:10px; border-radius:5px; width:100%; margin-bottom:10px;"><option>UPI</option><option>Card</option><option>COD</option></select>
+        <textarea id="addr" placeholder="Enter Delivery Address" style="width:100%; padding:10px; border-radius:5px;"></textarea>
+        <button onclick="placeOrder()" style="width:100%; margin-top:15px; background:#28a745; color:white;">PLACE ORDER</button>
     </div>
+
+    <div id="track-box" class="track-box">
+        <h4>Live Status: <span id="status-txt" style="color:#ffc107;">Preparing</span></h4>
+        <p>Rider: <span id="rider-txt">Searching...</span></p>
+    </div>
+
     <script>
         const API = "https://cloud-kitchen-project.onrender.com";
         let cart = []; let total = 0;
         document.getElementById('user').innerText = localStorage.getItem('userName');
 
-        async function load() {
+        async function fetchMenu() {
             const res = await fetch(`${API}/menu`);
             const data = await res.json();
-            const div = document.getElementById('items'); div.innerHTML = "";
+            const div = document.getElementById('menu-list'); div.innerHTML = "";
             data.forEach(i => {
-                div.innerHTML += `<div>${i.item_name} - ₹${i.price} <button onclick="add(${i.item_id}, ${i.price})">Add</button></div>`;
+                div.innerHTML += `<div class="menu-item"><span>${i.item_name} - ₹${i.price}</span><button onclick="add(${i.item_id}, ${i.price})">Add</button></div>`;
             });
         }
         function add(id, p) { cart.push(id); total += p; document.getElementById('bill').innerText = total; }
-        async function order() {
+        
+        async function placeOrder() {
             const res = await fetch(`${API}/place_order`, {
-                method:'POST', headers:{'Content-Type':'application/json'},
-                body: JSON.stringify({customer_name: localStorage.getItem('userName'), items: cart, total_price: total, address: document.getElementById('addr').value, payment_method: document.getElementById('method').value})
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({customer_name: localStorage.getItem('userName'), items: cart, total_price: total, address: document.getElementById('addr').value, payment_method: document.getElementById('pay-method').value})
             });
-            if(res.ok) alert("Order Placed!");
+            if(res.ok) { 
+                alert("Order Placed!"); 
+                document.getElementById('track-box').style.display = 'block';
+                setInterval(track, 5000);
+            }
         }
-        load();
+
+        async function track() {
+            const res = await fetch(`${API}/active_orders`);
+            const orders = await res.json();
+            const myOrder = orders.find(o => o.customer_name === localStorage.getItem('userName'));
+            if(myOrder) {
+                document.getElementById('status-txt').innerText = myOrder.order_status;
+                document.getElementById('rider-txt').innerText = myOrder.delivery_rider;
+            }
+        }
+        fetchMenu();
     </script>
 </body>
 </html>
