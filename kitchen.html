@@ -3,39 +3,49 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kitchen Dashboard</title>
+    <title>Kitchen Live Dashboard</title>
     <style>
-        body { font-family: sans-serif; background: #333; color: white; padding: 20px; }
-        .order-card { background: #444; padding: 15px; margin: 10px 0; border-left: 5px solid #ffc107; }
-        h1 { color: #ffc107; }
+        body { font-family: 'Segoe UI', sans-serif; background: #000; color: #fff; padding: 20px; }
+        .order-card { background: #222; padding: 20px; margin: 15px 0; border-radius: 10px; border-left: 8px solid #ffc107; }
+        h1 { color: #ffc107; border-bottom: 2px solid #ffc107; padding-bottom: 10px; }
+        .status-badge { background: #ffc107; color: black; padding: 4px 10px; border-radius: 4px; font-weight: bold; }
     </style>
 </head>
 <body>
-    <h1>Active Orders</h1>
-    <div id="orders-container"></div>
+    <h1>CHEF'S LIVE DASHBOARD</h1>
+    <div id="orders-container">Waiting for new orders...</div>
 
     <script>
         const API_URL = "https://cloud-kitchen-project.onrender.com";
 
         async function fetchOrders() {
-            const response = await fetch(`${API_URL}/active_orders`);
-            const orders = await response.json();
-            const container = document.getElementById('orders-container');
-            container.innerHTML = "";
+            try {
+                const response = await fetch(`${API_URL}/active_orders`);
+                const orders = await response.json();
+                const container = document.getElementById('orders-container');
+                
+                if (orders.length === 0) {
+                    container.innerHTML = "<h3>No active orders yet.</h3>";
+                    return;
+                }
 
-            orders.forEach(order => {
-                const div = document.createElement('div');
-                div.className = 'order-card';
-                div.innerHTML = `
-                    <h3>Customer: ${order.customer_name}</h3>
-                    <p><strong>Items:</strong> ${order.food_items}</p>
-                    <p>Status: ${order.status}</p>
-                `;
-                container.appendChild(div);
-            });
+                container.innerHTML = "";
+                orders.forEach(order => {
+                    const div = document.createElement('div');
+                    div.className = 'order-card';
+                    div.innerHTML = `
+                        <h2>Order #${order.order_id} - ${order.customer_name}</h2>
+                        <p><strong>FOOD:</strong> ${order.food_items}</p>
+                        <p><span class="status-badge">${order.status}</span></p>
+                    `;
+                    container.appendChild(div);
+                });
+            } catch (error) {
+                console.error("Connection lost:", error);
+            }
         }
 
-        // Auto-refresh every 5 seconds to see new orders
+        // Refresh every 5 seconds
         setInterval(fetchOrders, 5000);
         fetchOrders();
     </script>
