@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>CKMS - Dispatch & Logistics</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #0a0a0a; color: white; padding: 20px; }
+        .order-strip { background: #1a1a1a; padding: 20px; border-radius: 10px; margin-bottom: 15px; border-left: 5px solid #ffc107; display: flex; justify-content: space-between; align-items: center; }
+        select, button { padding: 10px; border-radius: 5px; border: none; cursor: pointer; }
+        .status-preparing { color: #ffc107; }
+        .status-delivery { color: #17a2b8; }
+        .status-done { color: #28a745; }
+    </style>
+</head>
+<body>
+    <h1>Dispatch Control Center</h1>
+    <p>Assign riders and update order logistics.</p>
+    <div id="dispatch-list">Loading active shipments...</div>
+
+    <script>
+        const API = "https://cloud-kitchen-project.onrender.com";
+
+        async function loadDispatch() {
+            const res = await fetch(`${API}/active_orders`);
+            const orders = await res.json();
+            const container = document.getElementById('dispatch-list');
+            container.innerHTML = "";
+
+            orders.forEach(o => {
+                container.innerHTML += `
+                    <div class="order-strip">
+                        <div>
+                            <strong>Order #${o.order_id}</strong> - ${o.customer_name}<br>
+                            <small>${o.food_items}</small>
+                        </div>
+                        <div>
+                            <select id="rider-${o.order_id}">
+                                <option>${o.delivery_rider}</option>
+                                <option value="Rahul">Rahul (Rider 1)</option>
+                                <option value="Amit">Amit (Rider 2)</option>
+                                <option value="Suresh">Suresh (Rider 3)</option>
+                            </select>
+                            <select id="status-${o.order_id}">
+                                <option>${o.order_status}</option>
+                                <option value="Preparing">Preparing</option>
+                                <option value="Out for Delivery">Out for Delivery</option>
+                                <option value="Delivered">Delivered</option>
+                            </select>
+                            <button onclick="updateLogistics(${o.order_id})" style="background:#28a745; color:white;">Update</button>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        async function updateLogistics(id) {
+            const rider = document.getElementById(`rider-${id}`).value;
+            const status = document.getElementById(`status-${id}`).value;
+
+            // Note: We need a small backend route for this, which we'll add next
+            alert(`Logistics Updated for #${id}: Rider ${rider} is now ${status}`);
+        }
+
+        loadDispatch();
+        setInterval(loadDispatch, 10000); // Auto-refresh every 10 seconds
+    </script>
+</body>
+</html>
