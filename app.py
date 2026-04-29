@@ -1,165 +1,135 @@
-from flask import Flask, request, jsonify
+from flask import Flask, render_template, request, jsonify
 import mysql.connector
 from flask_cors import CORS
 import hashlib
 
 app = Flask(__name__)
-# CRITICAL: This allows your GitHub frontend to communicate with this Render backend
-CORS(app) 
+CORS(app)
 
-# Database Configuration for Clever Cloud
+# --- CLOUD DATABASE CONFIG ---
 db_config = {
     'host': 'bflsc3v2zuem9cpblkk9-mysql.services.clever-cloud.com',
     'user': 'ukqysulb87iuj4pg',
     'password': 'D6mG9S057Z5o0LaNV42J', 
     'database': 'bflsc3v2zuem9cpblkk9',
-    'port': 3306,
-    'connection_timeout': 10
+    'port': 3306
 }
 
 def get_db_connection():
     return mysql.connector.connect(**db_config)
 
-@app.route('/')
-def setup():
-    conn = None
+# --- THE AUTO-BUILDER (Replaces phpMyAdmin) ---
+def setup_database():
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        # Initializing the Normalized Schema
-        cursor.execute("CREATE TABLE IF NOT EXISTS users (user_id INT AUTO_INCREMENT PRIMARY KEY, fullname VARCHAR(100), email VARCHAR(100) UNIQUE, password VARCHAR(255), role ENUM('customer', 'admin') DEFAULT 'customer')")
-        cursor.execute("CREATE TABLE IF NOT EXISTS menu_items (item_id INT AUTO_INCREMENT PRIMARY KEY, item_name VARCHAR(100), price DECIMAL(10,2))")
+        # Create Users table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                user_id INT AUTO_INCREMENT PRIMARY KEY,
+                fullname VARCHAR(100),
+                email VARCHAR(100) UNIQUE,
+                password VARCHAR(255),
+                role ENUM('customer', 'admin', 'chef') DEFAULT 'customer'
+            )
+        """)
+        # Create/Update Orders table with Logistics
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS orders (
                 order_id INT AUTO_INCREMENT PRIMARY KEY,
                 customer_name VARCHAR(100),
-                total_amount DECIMAL(10,2),
-                payment_method VARCHAR(50),
-                order_status VARCHAR(50) DEFAULT 'Preparing',
+                total_amount DECIMAL(10,2) DEFAULT 0.00,
+                payment_method ENUM('UPI', 'Card', 'COD') DEFAULT 'UPI',
+                payment_status ENUM('Unpaid', 'Paid') DEFAULT 'Unpaid',
+                order_status ENUM('Preparing', 'Out for Delivery', 'Delivered') DEFAULT 'Preparing',
                 delivery_address TEXT,
                 delivery_rider VARCHAR(100) DEFAULT 'Assigning...'
             )
         """)
-        cursor.execute("CREATE TABLE IF NOT EXISTS order_items (id INT AUTO_INCREMENT PRIMARY KEY, order_id INT, item_id INT, FOREIGN KEY (order_id) REFERENCES orders(order_id), FOREIGN KEY (item_id) REFERENCES menu_items(item_id))")
+        # Create Order Mapping
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS order_items (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                order_id INT,
+                item_id INT,
+                FOREIGN KEY (order_id) REFERENCES orders(order_id)
+            )
+        """)
         conn.commit()
-        return jsonify({"message": "CKMS Backend Ready and Database Synced!"})
+        cursor.close()
+        conn.close()
+        print("CKMS Database Built Successfully!")
+        return True
     except Exception as e:
-        return jsonify({"error": str(e)})
-    finally:
-        if conn:
-            cursor.close()
-            conn.close()
+        print(f"Setup Error: {e}")
+        return False
 
+@app.route('/')
+def home():
+    setup_database() # Triggers the build every time you visit the link
+    return jsonify({"status": "Online", "message": "System Ready"})
+
+# --- AUTHENTICATION ROUTES ---
 @app.route('/signup', methods=['POST'])
 def signup():
     data = request.json
-    pw = hashlib.sha256(data['password'].encode()).hexdigest()
+    hashed_pw = hashlib.sha256(data['password'].encode()).hexdigest()
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
-        cursor.execute("INSERT INTO users (fullname, email, password) VALUES (%s, %s, %s)", (data['fullname'], data['email'], pw))
+        cursor.execute("INSERT INTO users (fullname, email, password) VALUES (%s, %s, %s)", 
+                       (data['fullname'], data['email'], hashed_pw))
         conn.commit()
-        return jsonify({"message": "Success"}), 201
-    except Exception as e:
+        return jsonify({"message": "User registered"}), 201
+    except:
         return jsonify({"error": "Email already exists"}), 400
     finally:
-        cursor.close()
-        conn.close()
+        cursor.close(); conn.close()
 
 @app.route('/login', methods=['POST'])
 def login():
     data = request.json
-    pw = hashlib.sha256(data['password'].encode()).hexdigest()
+    hashed_pw = hashlib.sha256(data['password'].encode()).hexdigest()
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
-    try:
-        cursor.execute("SELECT fullname, role FROM users WHERE email = %s AND password = %s", (data['email'], pw))
-        user = cursor.fetchone()
-        if user: 
-            return jsonify(user)
-        return jsonify({"error": "Invalid email or password"}), 401
-    finally:
-        cursor.close()
-        conn.close()
+    cursor.execute("SELECT * FROM users WHERE email = %s AND password = %s", (data['email'], hashed_pw))
+    user = cursor.fetchone()
+    if user:
+        return jsonify({"fullname": user['fullname'], "role": user['role']})
+    return jsonify({"error": "Invalid login"}), 401
 
-@app.route('/menu', methods=['GET'])
-def get_menu():
-    conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
-    try:
-        cursor.execute("SELECT * FROM menu_items")
-        return jsonify(cursor.fetchall())
-    finally:
-        cursor.close()
-        conn.close()
-
-@app.route('/add_menu_item', methods=['POST'])
-def add_menu_item():
-    data = request.json
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    try:
-        cursor.execute("INSERT INTO menu_items (item_name, price) VALUES (%s, %s)", (data['item_name'], data['price']))
-        conn.commit()
-        return jsonify({"message": "Item added to menu"})
-    finally:
-        cursor.close()
-        conn.close()
-
+# --- LOGISTICS & ORDERS ---
 @app.route('/place_order', methods=['POST'])
 def place_order():
     data = request.json
     conn = get_db_connection()
     cursor = conn.cursor()
-    try:
-        # ACID Transaction: START
-        cursor.execute("INSERT INTO orders (customer_name, total_amount, payment_method, delivery_address) VALUES (%s, %s, %s, %s)", 
-                       (data['customer_name'], data['total_price'], data['payment_method'], data['address']))
-        oid = cursor.lastrowid
-        for iid in data['items']:
-            cursor.execute("INSERT INTO order_items (order_id, item_id) VALUES (%s, %s)", (oid, iid))
-        conn.commit() # ACID Transaction: COMMIT
-        return jsonify({"message": "Success", "order_id": oid})
-    except Exception as e:
-        if conn: conn.rollback() # ACID Transaction: ROLLBACK on failure
-        return jsonify({"error": str(e)}), 500
-    finally:
-        cursor.close()
-        conn.close()
+    cursor.execute("INSERT INTO orders (customer_name, total_amount, payment_method, payment_status, delivery_address) VALUES (%s, %s, %s, 'Paid', %s)", 
+                   (data['customer_name'], data['total_price'], data['payment_method'], data['address']))
+    oid = cursor.lastrowid
+    for iid in data['items']:
+        cursor.execute("INSERT INTO order_items (order_id, item_id) VALUES (%s, %s)", (oid, iid))
+    conn.commit()
+    cursor.close(); conn.close()
+    return jsonify({"message": "Order success", "order_id": oid})
 
 @app.route('/active_orders', methods=['GET'])
 def get_orders():
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
-    try:
-        # Demonstrating SQL Joins and GROUP_CONCAT for the project report
-        cursor.execute("""
-            SELECT o.*, GROUP_CONCAT(m.item_name SEPARATOR ', ') as food_items 
-            FROM orders o 
-            JOIN order_items oi ON o.order_id = oi.order_id 
-            JOIN menu_items m ON oi.item_id = m.item_id 
-            GROUP BY o.order_id 
-            ORDER BY o.order_id DESC
-        """)
-        return jsonify(cursor.fetchall())
-    finally:
-        cursor.close()
-        conn.close()
+    cursor.execute("SELECT * FROM orders ORDER BY order_id DESC")
+    orders = cursor.fetchall()
+    cursor.close(); conn.close()
+    return jsonify(orders)
 
-@app.route('/update_order', methods=['POST'])
-def update_order():
-    data = request.json
+@app.route('/menu', methods=['GET'])
+def get_menu():
     conn = get_db_connection()
-    cursor = conn.cursor()
-    try:
-        cursor.execute("UPDATE orders SET order_status = %s, delivery_rider = %s WHERE order_id = %s", 
-                       (data['status'], data['rider'], data['order_id']))
-        conn.commit()
-        return jsonify({"message": "Order Logistics Updated"})
-    finally:
-        cursor.close()
-        conn.close()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT * FROM menu_items")
+    items = cursor.fetchall()
+    cursor.close(); conn.close()
+    return jsonify(items)
 
 if __name__ == '__main__':
-    # Use port 5000 as required for Render/Flask standard
     app.run(host='0.0.0.0', port=5000)
