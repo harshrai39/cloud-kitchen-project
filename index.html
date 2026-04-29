@@ -2,66 +2,132 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>CKMS Order</title>
+    <title>CKMS - Order Food</title>
     <style>
-        body { font-family: sans-serif; background: #121212; color: white; padding: 20px; }
-        .card { background: #1e1e1e; padding: 15px; border-radius: 10px; margin: 10px 0; border: 1px solid #333; }
-        .selected { border: 2px solid #ffc107; }
-        button { background: #ffc107; color: black; padding: 10px; width: 100%; border-radius: 5px; cursor: pointer; border: none; font-weight: bold; }
-        input, select, textarea { width: 100%; padding: 10px; margin: 10px 0; border-radius: 5px; background: #2d2d2d; color: white; border: none; }
+        body { font-family: 'Segoe UI', sans-serif; background: #121212; color: white; padding: 20px; }
+        .container { max-width: 600px; margin: auto; }
+        .card { background: #1e1e1e; padding: 15px; border-radius: 10px; margin: 10px 0; border: 1px solid #333; transition: 0.3s; }
+        .selected { border: 2px solid #ffc107; background: #252525; }
+        button { background: #ffc107; color: black; padding: 12px; width: 100%; border-radius: 5px; cursor: pointer; border: none; font-weight: bold; }
+        input, select, textarea { width: 100%; padding: 12px; margin: 10px 0; border-radius: 5px; background: #2d2d2d; color: white; border: none; box-sizing: border-box; }
+        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 10px; }
+        .logout-btn { width: auto; background: #ff4444; color: white; padding: 5px 15px; font-size: 12px; }
     </style>
 </head>
 <body>
-    <h2>Welcome, <span id="user-display">Guest</span></h2>
-    <div id="menu-items">Loading...</div>
+    <div class="container">
+        <div class="header">
+            <h2>Hello, <span id="user-display">Guest</span></h2>
+            <button class="logout-btn" onclick="logout()">Logout</button>
+        </div>
 
-    <div class="card">
-        <h3>Checkout</h3>
-        <p>Total: ₹<span id="bill">0.00</span></p>
-        <select id="pay-type">
-            <option value="UPI">UPI (GPay/PhonePe)</option>
-            <option value="Card">Credit Card</option>
-            <option value="COD">Cash on Delivery</option>
-        </select>
-        <textarea id="ship-addr" placeholder="Enter Full Delivery Address"></textarea>
-        <button onclick="sendOrder()">PLACE ORDER & PAY</button>
+        <div id="menu-items">Loading menu from cloud...</div>
+
+        <div class="card" id="checkout-section">
+            <h3>Total Bill: ₹<span id="bill">0.00</span></h3>
+            <label>Payment Method:</label>
+            <select id="pay-type">
+                <option value="UPI">UPI (GPay/PhonePe)</option>
+                <option value="Card">Credit Card</option>
+                <option value="COD">Cash on Delivery</option>
+            </select>
+            <textarea id="ship-addr" placeholder="Enter Full Delivery Address" rows="3"></textarea>
+            <button onclick="sendOrder()">PLACE ORDER & PAY</button>
+        </div>
     </div>
 
     <script>
         const API = "https://cloud-kitchen-project.onrender.com";
-        let cart = []; let total = 0;
-        const name = localStorage.getItem('userName') || "Guest";
+        let cart = []; 
+        let total = 0;
+
+        // --- SESSION SECURITY ---
+        const name = localStorage.getItem('userName');
+        if (!name) {
+            alert("Please login first!");
+            window.location.href = "login.html"; // Forced redirect if not logged in
+        }
         document.getElementById('user-display').innerText = name;
 
-        async function loadMenu() {
-            const res = await fetch(`${API}/menu`);
-            const items = await res.json();
-            const div = document.getElementById('menu-items'); div.innerHTML = "";
-            items.forEach(i => {
-                div.innerHTML += `<div class="card" id="food-${i.item_id}">
-                    <h4>${i.item_name} - ₹${i.price}</h4>
-                    <button onclick="pick(${i.item_id}, ${i.price})">Select</button>
-                </div>`;
-            });
+        function logout() {
+            localStorage.clear();
+            window.location.href = "login.html";
         }
 
+        // --- LOAD MENU ---
+        async function loadMenu() {
+            try {
+                const res = await fetch(`${API}/menu`);
+                const items = await res.json();
+                const div = document.getElementById('menu-items');
+                
+                if (items.length === 0) {
+                    div.innerHTML = "<p>The menu is currently empty.</p>";
+                    return;
+                }
+
+                div.innerHTML = "";
+                items.forEach(i => {
+                    div.innerHTML += `
+                        <div class="card" id="food-${i.item_id}">
+                            <h4>${i.item_name}</h4>
+                            <p>Price: ₹${i.price}</p>
+                            <button onclick="pick(${i.item_id}, ${i.price})">Select Item</button>
+                        </div>`;
+                });
+            } catch (err) {
+                document.getElementById('menu-items').innerHTML = "Error connecting to server. Please refresh.";
+            }
+        }
+
+        // --- SELECTION LOGIC ---
         function pick(id, price) {
             const el = document.getElementById(`food-${id}`);
-            if(cart.includes(id)) { cart = cart.filter(x => x !== id); total -= price; el.classList.remove('selected'); }
-            else { cart.push(id); total += price; el.classList.add('selected'); }
+            if(cart.includes(id)) {
+                cart = cart.filter(x => x !== id);
+                total -= price;
+                el.classList.remove('selected');
+            } else {
+                cart.push(id);
+                total += price;
+                el.classList.add('selected');
+            }
             document.getElementById('bill').innerText = total.toFixed(2);
         }
 
+        // --- SEND ORDER ---
         async function sendOrder() {
             const addr = document.getElementById('ship-addr').value;
-            if(!addr || cart.length === 0) return alert("Select food and enter address!");
-            const res = await fetch(`${API}/place_order`, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({customer_name: name, items: cart, total_price: total, address: addr, payment_method: document.getElementById('pay-type').value})
-            });
-            if(res.ok) { alert("Order Successful!"); window.location.reload(); }
+            const payMethod = document.getElementById('pay-type').value;
+
+            if(!addr || cart.length === 0) {
+                return alert("Please select food and enter your address.");
+            }
+
+            try {
+                const res = await fetch(`${API}/place_order`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        customer_name: name,
+                        items: cart,
+                        total_price: total,
+                        address: addr,
+                        payment_method: payMethod
+                    })
+                });
+
+                if(res.ok) {
+                    alert("Order Successful! Redirecting to tracking...");
+                    window.location.reload();
+                } else {
+                    alert("Failed to place order. Try again.");
+                }
+            } catch (error) {
+                alert("Server Error. Check your internet.");
+            }
         }
+
         loadMenu();
     </script>
 </body>

@@ -1,31 +1,78 @@
 <!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8"><title>CKMS - Login</title>
-<style>
-    body { background: #0b0b0b; color: white; font-family: sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; }
-    .card { background: #1a1a1a; padding: 40px; border-radius: 15px; width: 320px; border-top: 4px solid #ffc107; text-align: center; }
-    input { width: 100%; padding: 12px; margin: 10px 0; border-radius: 5px; border: none; background: #2a2a2a; color: white; box-sizing: border-box; }
-    button { width: 100%; padding: 12px; background: #ffc107; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; }
-</style></head>
+<head>
+    <meta charset="UTF-8">
+    <title>CKMS - Login</title>
+    <style>
+        body { background: #0b0b0b; color: white; font-family: 'Segoe UI', sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+        .card { background: #1a1a1a; padding: 40px; border-radius: 15px; width: 320px; border-top: 4px solid #ffc107; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        h2 { margin-bottom: 20px; color: #ffc107; }
+        input { width: 100%; padding: 12px; margin: 10px 0; border-radius: 5px; border: none; background: #2a2a2a; color: white; box-sizing: border-box; }
+        button { width: 100%; padding: 12px; background: #ffc107; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; margin-top: 10px; transition: 0.3s; }
+        button:hover { background: #e0a800; }
+        button:disabled { background: #555; cursor: not-allowed; }
+        .footer { margin-top: 20px; font-size: 14px; color: #888; }
+        .footer a { color: #ffc107; text-decoration: none; }
+    </style>
+</head>
 <body>
     <div class="card">
-        <h2>Login</h2>
-        <input type="email" id="email" placeholder="Email">
+        <h2>Member Login</h2>
+        <input type="email" id="email" placeholder="Email Address">
         <input type="password" id="pass" placeholder="Password">
-        <button onclick="login()">Login</button>
+        <button id="loginBtn" onclick="login()">Login</button>
+        
+        <div class="footer">
+            New user? <a href="signup.html">Create an Account</a>
+        </div>
     </div>
+
     <script>
         const API = "https://cloud-kitchen-project.onrender.com";
+
         async function login() {
-            const res = await fetch(`${API}/login`, {
-                method: 'POST', headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({email: document.getElementById('email').value, password: document.getElementById('pass').value})
-            });
-            const user = await res.json();
-            if(res.ok) { 
-                localStorage.setItem('userName', user.fullname); 
-                window.location.href = (user.role === 'admin') ? "admin.html" : "menu.html";
-            } else alert("Invalid Login");
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('pass').value;
+            const btn = document.getElementById('loginBtn');
+
+            if(!email || !password) return alert("Please fill in all fields.");
+
+            // Show loading state
+            btn.disabled = true;
+            btn.innerText = "Checking...";
+
+            try {
+                const res = await fetch(`${API}/login`, {
+                    method: 'POST', 
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ email, password })
+                });
+
+                const user = await res.json();
+
+                if(res.ok) { 
+                    // Save session data
+                    localStorage.setItem('userName', user.fullname); 
+                    localStorage.setItem('userRole', user.role);
+                    
+                    alert("Login Successful!");
+
+                    // REDIRECTION LOGIC
+                    if (user.role === 'admin') {
+                        window.location.href = "admin.html";
+                    } else {
+                        // Change 'menu.html' to 'index.html' to match your file name
+                        window.location.href = "index.html"; 
+                    }
+                } else {
+                    alert(user.error || "Invalid Email or Password");
+                }
+            } catch (err) {
+                alert("Server Error. Please ensure the backend is live.");
+            } finally {
+                btn.disabled = false;
+                btn.innerText = "Login";
+            }
         }
     </script>
 </body>

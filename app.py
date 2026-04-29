@@ -18,12 +18,13 @@ db_config = {
 def get_db_connection():
     return mysql.connector.connect(**db_config)
 
-# --- THE AUTO-BUILDER (Replaces phpMyAdmin) ---
+# --- THE AUTO-BUILDER ---
 def setup_database():
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        # Create Users table
+        
+        # 1. Users Table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 user_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -33,7 +34,17 @@ def setup_database():
                 role ENUM('customer', 'admin', 'chef') DEFAULT 'customer'
             )
         """)
-        # Create/Update Orders table with Logistics
+
+        # 2. Menu Table (Crucial for loading items)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS menu_items (
+                item_id INT AUTO_INCREMENT PRIMARY KEY,
+                item_name VARCHAR(100),
+                price DECIMAL(10,2)
+            )
+        """)
+
+        # 3. Orders Table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS orders (
                 order_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -46,7 +57,8 @@ def setup_database():
                 delivery_rider VARCHAR(100) DEFAULT 'Assigning...'
             )
         """)
-        # Create Order Mapping
+
+        # 4. Order Mapping
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS order_items (
                 id INT AUTO_INCREMENT PRIMARY KEY,
@@ -55,10 +67,10 @@ def setup_database():
                 FOREIGN KEY (order_id) REFERENCES orders(order_id)
             )
         """)
+        
         conn.commit()
         cursor.close()
         conn.close()
-        print("CKMS Database Built Successfully!")
         return True
     except Exception as e:
         print(f"Setup Error: {e}")
@@ -66,10 +78,10 @@ def setup_database():
 
 @app.route('/')
 def home():
-    setup_database() # Triggers the build every time you visit the link
-    return jsonify({"status": "Online", "message": "System Ready"})
+    setup_database()
+    return jsonify({"status": "Online", "message": "CKMS Management System Ready"})
 
-# --- AUTHENTICATION ROUTES ---
+# --- AUTHENTICATION ---
 @app.route('/signup', methods=['POST'])
 def signup():
     data = request.json
@@ -94,6 +106,7 @@ def login():
     cursor = conn.cursor(dictionary=True)
     cursor.execute("SELECT * FROM users WHERE email = %s AND password = %s", (data['email'], hashed_pw))
     user = cursor.fetchone()
+    cursor.close(); conn.close()
     if user:
         return jsonify({"fullname": user['fullname'], "role": user['role']})
     return jsonify({"error": "Invalid login"}), 401
@@ -104,20 +117,38 @@ def place_order():
     data = request.json
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("INSERT INTO orders (customer_name, total_amount, payment_method, payment_status, delivery_address) VALUES (%s, %s, %s, 'Paid', %s)", 
-                   (data['customer_name'], data['total_price'], data['payment_method'], data['address']))
-    oid = cursor.lastrowid
-    for iid in data['items']:
-        cursor.execute("INSERT INTO order_items (order_id, item_id) VALUES (%s, %s)", (oid, iid))
-    conn.commit()
-    cursor.close(); conn.close()
-    return jsonify({"message": "Order success", "order_id": oid})
+    try:
+        # Use total_amount to match your database column name
+        cursor.execute("""
+            INSERT INTO orders (customer_name, total_amount, payment_method, payment_status, delivery_address) 
+            VALUES (%s, %s, %s, 'Paid', %s)""", 
+            (data['customer_name'], data['total_price'], data['payment_method'], data['address']))
+        
+        oid = cursor.lastrowid
+        for iid in data['items']:
+            cursor.execute("INSERT INTO order_items (order_id, item_id) VALUES (%s, %s)", (oid, iid))
+        
+        conn.commit()
+        return jsonify({"message": "Order success", "order_id": oid}), 201
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cursor.close(); conn.close()
 
 @app.route('/active_orders', methods=['GET'])
 def get_orders():
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
-    cursor.execute("SELECT * FROM orders ORDER BY order_id DESC")
+    # Advanced SQL query to get the food names joined from the menu table
+    query = """
+        SELECT o.*, GROUP_CONCAT(m.item_name SEPARATOR ', ') as food_items
+        FROM orders o
+        JOIN order_items oi ON o.order_id = oi.order_id
+        JOIN menu_items m ON oi.item_id = m.item_id
+        GROUP BY o.order_id
+        ORDER BY o.order_id DESC
+    """
+    cursor.execute(query)
     orders = cursor.fetchall()
     cursor.close(); conn.close()
     return jsonify(orders)
